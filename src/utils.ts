@@ -1,29 +1,59 @@
-import { useCallback, useEffect } from "react";
+// Custom event system with type safety
+// Event types
+export interface CustomEventMap {
+  skipTo: { timePercentage: number };
+  // Add more events here as needed
+}
 
-type SkipToEvent = CustomEvent<{ timePercentage: number }>;
-const SKIP_TO_EVENT_NAME = "skipTo";
+// Event management utilities
+export const eventSystem = {
+  /**
+   * Dispatches a custom event with typed payload
+   */
+  dispatch<K extends keyof CustomEventMap>(
+    eventName: K,
+    detail: CustomEventMap[K]
+  ): void {
+    const event = new CustomEvent(eventName, { detail });
+    window.dispatchEvent(event);
+  },
+
+  /**
+   * Adds a typed event listener
+   */
+  addEventListener<K extends keyof CustomEventMap>(
+    eventName: K,
+    handler: (detail: CustomEventMap[K]) => void
+  ): () => void {
+    const eventHandler = (event: Event) => {
+      const customEvent = event as CustomEvent<CustomEventMap[K]>;
+      handler(customEvent.detail);
+    };
+
+    window.addEventListener(eventName, eventHandler);
+    
+    // Return cleanup function
+    return () => {
+      window.removeEventListener(eventName, eventHandler);
+    };
+  }
+};
+
+// React hooks
+import { useCallback, useEffect } from "react";
 
 export function useSkipTo() {
   return useCallback((timePercentage: number) => {
-    const event: SkipToEvent = new CustomEvent(SKIP_TO_EVENT_NAME, {
-      detail: { timePercentage },
-    });
-
-    window.dispatchEvent(event);
+    eventSystem.dispatch("skipTo", { timePercentage });
   }, []);
 }
 
 export function useSkipToListener(callback: (timePercentage: number) => void) {
   useEffect(() => {
-    function handler(event: Event | SkipToEvent) {
-      const customEvent = event as SkipToEvent;
-      callback(customEvent.detail.timePercentage);
-    }
+    const cleanup = eventSystem.addEventListener("skipTo", (detail) => {
+      callback(detail.timePercentage);
+    });
 
-    window.addEventListener(SKIP_TO_EVENT_NAME, handler);
-
-    return () => {
-      window.removeEventListener(SKIP_TO_EVENT_NAME, handler);
-    };
+    return cleanup;
   }, [callback]);
 }
